@@ -1,4 +1,4 @@
-﻿// CONFIG
+// CONFIG
 // Remote API / database base URL (use local Node API)
 const API = 'https://unopprobrious-jason-demonstrational.ngrok-free.dev';
 const HEADERS = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
@@ -12,6 +12,25 @@ const calState = {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
+// Date helpers
+function parseDateForDisplay(d) {
+    if (!d) return null;
+    // try direct Date
+    let pd = d instanceof Date ? d : new Date(d);
+    if (!isNaN(pd.getTime())) return pd;
+    const s = String(d).trim();
+    if (s.length >= 10) {
+        pd = new Date(s.slice(0, 10) + 'T00:00');
+        if (!isNaN(pd.getTime())) return pd;
+    }
+    return null;
+}
+
+function formatLocaleDate(d) {
+    const pd = parseDateForDisplay(d);
+    return pd ? pd.toLocaleDateString('en-PH') : '—';
+}
+
 // NAVIGATION
 function navigate(pageId) {
     const pages = document.querySelectorAll('.page');
@@ -23,7 +42,7 @@ function navigate(pageId) {
     if (!target) { console.error('navigate: target not found', pageId); return; }
     target.classList.add('active');
     try {
-        target.style.display = pageId === 'login-page' ? 'flex' : 'block';  
+        target.style.display = pageId === 'login-page' ? 'flex' : 'block';
     } catch (e) { }
     window.scrollTo(0, 0);
 }
@@ -33,6 +52,8 @@ function logout() {
     document.getElementById('password-input').value = '';
     document.getElementById('login-err').style.display = 'none';
     document.getElementById('navbar').classList.remove('visible');
+    const loginBtn = document.getElementById('login-btn');
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'LOGIN'; }
     navigate('login-page');
 }
 
@@ -90,14 +111,13 @@ async function doLogin() {
         document.getElementById('inc-time').value = now;
 
         navigate('dashboard-page');
-        // call async loaders but protect from errors so UI remains responsive
-        try { loadSchedule().catch(e => console.error('loadSchedule error YAWAAAAAAAAAAAAA', e)); } catch (e) { console.error(e); }
-        //try { loadCancelRequests().catch(e => console.error('loadCancelRequests error', e)); } catch(e){ console.error(e); }
+        try { loadSchedule().catch(e => console.error('loadSchedule error', e)); } catch (e) { console.error(e); }
     } catch (e) {
         showLoginErr('Cannot connect to server. Please try again.');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Access System';
+        // keep login button label consistent with HTML
+        btn.textContent = 'LOGIN';
     }
 }
 
@@ -106,97 +126,22 @@ function showLoginErr(msg) {
     el.textContent = msg; el.style.display = 'block';
 }
 
+
 // SCHEDULE
 async function loadSchedule() {
-
-    const tbody = document.getElementById('schedule-tbody');
     try {
         const res = await fetch(`${API}/api/schedule/${encodeURIComponent(guard.name)}`, { headers: HEADERS });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!data.success || !data.schedules?.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No schedules found.</td></tr>';
             document.getElementById('dash-shift').textContent = 'No upcoming shift';
             return;
         }
-        // Show first shift on dashboard
         const first = data.schedules[0];
-        console.log('RAW shift_date:', JSON.stringify(data.schedules[0]));
-        document.getElementById('dash-shift').textContent = `${new Date(first.shift_date).toLocaleDateString('en-PH')} | ${first.time}`;
-
-        console.log('shift_date raw value:', data.schedules[0]?.shift_date);
-        tbody.innerHTML = data.schedules.map(s => `
-      <tr>
-       <td>${s.shift_date ? new Date(s.shift_date).toLocaleDateString('en-PH') : '—'}</td>
-        <td>${s.location}</td>
-        <td>${s.time}</td>
-        <td><button class="btn-cancel-shift"
-    data-location="${s.location.replace(/"/g, '&quot;')}" 
-    data-date="${s.shift_date}" 
-    onclick="requestCancel(this.dataset.location, this.dataset.date)">
-      </tr>`).join('');
+        const firstDate = new Date(first.shift_date);
+        const firstDateText = !isNaN(firstDate.getTime()) ? firstDate.toLocaleDateString('en-PH') : '—';
+        document.getElementById('dash-shift').textContent = `${firstDateText} | ${first.time}`;
     } catch {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Failed to load schedules.</td></tr>';
-    }
-}
-
-async function requestCancel(location, date) {
-    // normalize and validate date before confirming
-    function parseDateForDisplay(d) {
-        if (!d) return null;
-        // try direct parsing
-        let pd = new Date(d);
-        if (!isNaN(pd.getTime())) return pd;
-        // try assume it's a YYYY-MM-DD or similar prefix
-        const s = String(d).trim();
-        if (s.length >= 10) {
-            pd = new Date(s.slice(0, 10) + 'T00:00');
-            if (!isNaN(pd.getTime())) return pd;
-        }
-        return null;
-    }
-
-    const parsedDate = parseDateForDisplay(date);
-    if (!parsedDate) { showToast('Error', 'Invalid date. Cannot submit cancel request.', true); return; }
-
-    const displayDate = parsedDate.toLocaleDateString('en-PH');
-    if (!confirm(`Request cancel for ${location} on ${displayDate}?`)) return;
-    try {
-        const res = await fetch(`${API}/api/request-cancel`, {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({ guard_id: guard.id, guardName: guard.name, location, date: parsedDate.toISOString().split('T')[0] })
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Cancel request submitted!', `Location: ${location}`, false);
-            loadCancelRequests();
-        } else {
-            showToast('Already Requested', data.message, true);  // handles 409
-        }
-    } catch {
-        showToast('Error', 'Could not submit request.', true);
-    }
-}
-
-async function loadCancelRequests() {
-    const tbody = document.getElementById('cancel-tbody');
-    if (!tbody) return;
-    try {
-        const res = await fetch(`${API}/api/cancel-requests/${encodeURIComponent(guard.name)}`, { headers: HEADERS });
-        const data = await res.json();
-        if (!data.success || !data.requests?.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No cancel requests found.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = data.requests.map(r => `
-      <tr>
-        <td>${s.shift_date ? new Date(s.shift_date.toString().slice(0, 10) + 'T00:00').toLocaleDateString('en-PH') : '—'}</td>
-        <td>${r.location}</td>
-        <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('en-PH') : '—'}</td>
-        <td><span class="badge ${r.status}">${r.status.toUpperCase()}</span></td>
-      </tr>`).join('');
-    } catch {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Failed to load requests.</td></tr>';
+        document.getElementById('dash-shift').textContent = 'No upcoming shift';
     }
 }
 
@@ -226,12 +171,13 @@ async function submitIncident() {
 
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Submitting...';
     try {
+        console.log('submitIncident: posting incident', { guard_id: guard.id, title });
         const res = await fetch(`${API}/api/incident`, {
             method: 'POST',
             headers: { 'ngrok-skip-browser-warning': 'true' },
             body: fd
         });
-        const data = await res.json();
+        const data = await res.json().catch(e => { console.error('submitIncident: invalid JSON', e); return {}; });
         if (data.success) {
             showToast('Incident report submitted!', 'Forwarded to operations center.', false);
             document.getElementById('inc-title').value = '';
@@ -250,8 +196,10 @@ async function submitIncident() {
 async function loadLeaveBalance() {
     if (!guard) return;
     try {
+        console.log('loadLeaveBalance: fetching for', guard?.id);
         const res = await fetch(`${API}/api/leave-balance/${guard.id}`, { headers: HEADERS });
-        const data = await res.json();
+        console.log('loadLeaveBalance: response', res.status);
+        const data = await res.json().catch(e => { console.error('loadLeaveBalance: invalid JSON', e); return {}; });
         if (data.success) {
             document.getElementById('bal-avail').textContent = data.available + ' days';
             document.getElementById('bal-used').textContent = data.used + ' days';
@@ -272,11 +220,12 @@ async function submitLeave() {
 
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Submitting...';
     try {
+        console.log('submitLeave: posting leave', { guard_id: guard.id, start: fmt(startDate), end: fmt(endDate), days });
         const res = await fetch(`${API}/api/leave`, {
             method: 'POST', headers: HEADERS,
             body: JSON.stringify({ guard_id: guard.id, guardName: guard.name, leave_type: type, start_date: fmt(startDate), end_date: fmt(endDate), days_count: days, reason })
         });
-        const data = await res.json();
+        const data = await res.json().catch(e => { console.error('submitLeave: invalid JSON', e); return {}; });
         if (data.success) {
             showToast('Leave request submitted!', `${days} day(s) requested.`, false);
             resetLeaveForm();
@@ -380,6 +329,52 @@ document.addEventListener('click', e => {
         if (wrap && !wrap.contains(e.target)) document.getElementById(which + '-cal').classList.remove('open');
     });
 });
+
+// PAYROLL MODAL
+async function openPayrollModal() {
+    const modal = document.getElementById('payroll-modal');
+    const body = document.getElementById('payroll-modal-body');
+    modal.classList.add('open');
+    body.innerHTML = '<div class="payroll-loading">Loading payroll details...</div>';
+
+    try {
+        const res = await fetch(`${API}/api/payroll/${guard.id}`, { headers: HEADERS });
+        const data = await res.json().catch(() => ({}));
+
+        if (!data.success) {
+            body.innerHTML = '<div class="payroll-loading">No payroll data available.</div>';
+            return;
+        }
+
+        const p = data.payroll;
+        const fmt = n => '₱ ' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 });
+        const fmtNeg = n => '- ₱ ' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 });
+
+        body.innerHTML = `
+            <div class="payroll-net">
+                <div class="payroll-net-amount">${fmt(p.net_pay)}</div>
+                <div class="payroll-net-label">Current Month</div>
+            </div>
+            <div class="payroll-divider"></div>
+            <div class="payroll-row"><span>Total Days Worked</span><span>${p.days_worked} days</span></div>
+            <div class="payroll-row"><span>Gross Pay</span><span>${fmt(p.gross_pay)}</span></div>
+            <div class="payroll-divider"></div>
+            <div class="payroll-section-label">DEDUCTIONS</div>
+            <div class="payroll-deduction-row"><span>Advance Cash</span><span>${fmtNeg(p.advance_cash)}</span></div>
+            <div class="payroll-deduction-row"><span>Loan</span><span>${fmtNeg(p.loan)}</span></div>
+            <div class="payroll-deduction-row"><span>SSS</span><span>${fmtNeg(p.sss)}</span></div>
+            <div class="payroll-deduction-row"><span>PhilHealth</span><span>${fmtNeg(p.philhealth)}</span></div>
+            <div class="payroll-deduction-row"><span>Pag-IBIG</span><span>${fmtNeg(p.pagibig)}</span></div>
+            <div class="payroll-total-row"><span>Total Deductions</span><span>${fmtNeg(p.total_deductions)}</span></div>`;
+    } catch {
+        body.innerHTML = '<div class="payroll-loading">Failed to load payroll details.</div>';
+    }
+}
+
+function closePayrollModal(e) {
+    if (e && e.target !== document.getElementById('payroll-modal')) return;
+    document.getElementById('payroll-modal').classList.remove('open');
+}
 
 // TOAST
 function showToast(title, sub, isErr) {
