@@ -137,9 +137,7 @@ async function loadSchedule() {
             return;
         }
         const first = data.schedules[0];
-        const firstDate = new Date(first.shift_date);
-        const firstDateText = !isNaN(firstDate.getTime()) ? firstDate.toLocaleDateString('en-PH') : '—';
-        document.getElementById('dash-shift').textContent = `${firstDateText} | ${first.time}`;
+        document.getElementById('dash-shift').textContent = first.time;
     } catch {
         document.getElementById('dash-shift').textContent = 'No upcoming shift';
     }
