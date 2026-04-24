@@ -1,6 +1,6 @@
 // main.js guard
 // Remote API / database base URL (use local Node API)
-const API = 'https://unopprobrious-jason-demonstrational.ngrok-free.dev';
+const API = 'https://refute-yearbook-greeter.ngrok-free.dev';
 const HEADERS = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
 // STATE
 let guard = null;
