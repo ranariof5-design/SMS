@@ -144,6 +144,34 @@ async function loadSchedule() {
     }
 }
 
+async function loadMyIncidents() {
+  const res = await fetch(`${API}/api/incidents/${guard.username}`, { headers: HEADERS });
+  const data = await res.json().catch(() => ({}));
+  const list = document.getElementById('my-incidents-list');
+  if (!data.success || !data.incidents?.length) {
+    list.innerHTML = '<p class="empty-msg">No incidents submitted yet.</p>'; return;
+  }
+  list.innerHTML = data.incidents.map(i => `
+    <div class="history-item">
+      <div class="history-title">${i.title}</div>
+      <div class="history-meta">${i.date} · ${i.status}</div>
+    </div>`).join('');
+}
+
+async function loadMyLeaves() {
+  const res = await fetch(`${API}/api/leave/${guard.username}`, { headers: HEADERS });
+  const data = await res.json().catch(() => ({}));
+  const list = document.getElementById('my-leaves-list');
+  if (!data.success || !data.requests?.length) {
+    list.innerHTML = '<p class="empty-msg">No leave requests yet.</p>'; return;
+  }
+  list.innerHTML = data.requests.map(l => `
+    <div class="history-item">
+      <div class="history-title">${l.leaveType} · ${l.days} days</div>
+      <div class="history-meta">${l.startDate} → ${l.endDate} · ${l.status}</div>
+    </div>`).join('');
+}
+
 // INCIDENT
 function updateFileName(input) {
     document.getElementById('file-name').textContent = input.files[0]?.name || 'Upload photo or document';
@@ -362,20 +390,20 @@ async function openPayrollModal() {
 
         body.innerHTML = `
             <div class="payroll-net">
-            <div class="payroll-net-amount">${fmt(p.net_pay)}</div>
+            <div class="payroll-net-amount">${fmt(p.netPay)}</div>
             <div class="payroll-net-label">Current Month</div>
             </div>
             <div class="payroll-divider"></div>
-            <div class="payroll-row"><span>Total Days Worked</span><span>${p.days_worked} days</span></div>
-            <div class="payroll-row"><span>Gross Pay</span><span>${fmt(p.gross_pay)}</span></div>
+            <div class="payroll-row"><span>Total Days Worked</span><span>${p.daysWorked} days</span></div>
+            <div class="payroll-row"><span>Gross Pay</span><span>${fmt(p.grossPay)}</span></div>
             <div class="payroll-divider"></div>
             <div class="payroll-section-label">DEDUCTIONS</div>
-            <div class="payroll-deduction-row"><span>Advance Cash</span><span>${fmtNeg(p.advance_cash)}</span></div>
+            <div class="payroll-deduction-row"><span>Advance Cash</span><span>${fmtNeg(p.advanceCash)}</span></div>
             <div class="payroll-deduction-row"><span>Loan</span><span>${fmtNeg(p.loan)}</span></div>
             <div class="payroll-deduction-row"><span>SSS</span><span>${fmtNeg(p.sss)}</span></div>
-            <div class="payroll-deduction-row"><span>PhilHealth</span><span>${fmtNeg(p.philhealth)}</span></div>
+            <div class="payroll-deduction-row"><span>PhilHealth</span><span>${fmtNeg(p.philHealth)}</span></div>
             <div class="payroll-deduction-row"><span>Pag-IBIG</span><span>${fmtNeg(p.pagibig)}</span></div>
-            <div class="payroll-total-row"><span>Total Deductions</span><span>${fmtNeg(p.total_deductions)}</span></div>`;
+            <div class="payroll-total-row"><span>Total Deductions</span><span>${fmtNeg(p.totalDeductions)}</span></div>`;
     } catch {
         body.innerHTML = '<div class="payroll-loading">Failed to load payroll details.</div>';
     }
