@@ -1,6 +1,6 @@
-// CONFIG
+// main.js guard
 // Remote API / database base URL (use local Node API)
-const API = 'https://refute-yearbook-greeter.ngrok-free.dev';
+const API = 'https://unopprobrious-jason-demonstrational.ngrok-free.dev';
 const HEADERS = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
 // STATE
 let guard = null;
@@ -57,6 +57,7 @@ function logout() {
     navigate('login-page');
 }
 
+
 // LOGIN
 async function doLogin() {
     const username = document.getElementById('username-input').value.trim();
@@ -97,11 +98,11 @@ async function doLogin() {
         if (!data || !data.success) { showLoginErr(data?.message || 'Login failed'); return; }
 
         guard = data.guard;
-        document.getElementById('guard-name-display').textContent = guard.name.toUpperCase();
+        document.getElementById('guard-name-display').textContent = guard.fullname.toUpperCase();
         document.getElementById('navbar').classList.add('visible');
 
-        // Set dashboard values
-        document.getElementById('dash-post').textContent = guard.post || 'No post assigned';
+        // Set dashboard 
+        document.getElementById('dash-post').textContent = guard.position || 'No post assigned';
         document.getElementById('dash-balance').textContent = '₱ ' + Number(guard.balance).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
         // Set incident date/time
@@ -130,7 +131,7 @@ function showLoginErr(msg) {
 // SCHEDULE
 async function loadSchedule() {
     try {
-        const res = await fetch(`${API}/api/schedule/${encodeURIComponent(guard.name)}`, { headers: HEADERS });
+        const res = await fetch(`${API}/api/schedule/${encodeURIComponent(guard.username)}`, { headers: HEADERS });
         const data = await res.json().catch(() => ({}));
         if (!data.success || !data.schedules?.length) {
             document.getElementById('dash-shift').textContent = 'No upcoming shift';
@@ -149,6 +150,7 @@ function updateFileName(input) {
 }
 
 async function submitIncident() {
+  
     const title = document.getElementById('inc-title').value.trim();
     const date = document.getElementById('inc-date').value;
     const time = document.getElementById('inc-time').value;
@@ -160,7 +162,8 @@ async function submitIncident() {
 
     const fd = new FormData();
     fd.append('guard_id', guard.id);
-    fd.append('guardName', guard.name);
+    fd.append('guardName', guard.name);        // display name
+    fd.append('guardUsername', guard.username); // ← ADD THIS
     fd.append('title', title);
     fd.append('incident_date', date);
     fd.append('incident_time', time);
@@ -221,7 +224,16 @@ async function submitLeave() {
         console.log('submitLeave: posting leave', { guard_id: guard.id, start: fmt(startDate), end: fmt(endDate), days });
         const res = await fetch(`${API}/api/leave`, {
             method: 'POST', headers: HEADERS,
-            body: JSON.stringify({ guard_id: guard.id, guardName: guard.name, leave_type: type, start_date: fmt(startDate), end_date: fmt(endDate), days_count: days, reason })
+            body: JSON.stringify({
+                guard_id: guard.id,
+                guardName: guard.name,        // display name
+                guardUsername: guard.username,    // ← ADD THIS
+                leave_type: type,
+                start_date: fmt(startDate),
+                end_date: fmt(endDate),
+                days_count: days,
+                reason
+            })
         });
         const data = await res.json().catch(e => { console.error('submitLeave: invalid JSON', e); return {}; });
         if (data.success) {
@@ -350,8 +362,8 @@ async function openPayrollModal() {
 
         body.innerHTML = `
             <div class="payroll-net">
-                <div class="payroll-net-amount">${fmt(p.net_pay)}</div>
-                <div class="payroll-net-label">Current Month</div>
+            <div class="payroll-net-amount">${fmt(p.net_pay)}</div>
+            <div class="payroll-net-label">Current Month</div>
             </div>
             <div class="payroll-divider"></div>
             <div class="payroll-row"><span>Total Days Worked</span><span>${p.days_worked} days</span></div>
